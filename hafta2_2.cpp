@@ -2,8 +2,8 @@
 #include <vector>
 #include <thread>
 #include <chrono>
-#include <functional> // ref() ve cref() için eklendi
-#include <algorithm>  // fill() fonksiyonu için eklendi
+#include <functional>
+#include <algorithm>
 #include <opencv2/opencv.hpp>
 
 using namespace std;
@@ -20,8 +20,8 @@ void changeBrightness(const Mat& src, Mat& dst, int startRow, int endRow, float 
     }
 }
 
-// --- GOREV 3: Parcali Histogram Hesaplama Fonksiyonu ---
-void calcHist(const Mat& src, int startRow, int endRow, vector<int>& localHist) {
+// --- GOREV 3: Parcali Histogram Hesaplama Fonksiyonu (İSİM DEĞİŞTİRİLDİ) ---
+void calculateLocalHistogram(const Mat& src, int startRow, int endRow, vector<int>& localHist) {
     fill(localHist.begin(), localHist.end(), 0);
     for (int r = startRow; r < endRow; r++) {
         for (int c = 0; c < src.cols; c++) {
@@ -43,14 +43,12 @@ int main() {
     
     cout << "=== GOREV 2: PARLAKLIK DEGISTIRME (1 THREAD VS 4 THREAD) ===" << endl;
     
-    // 1 THREAD ILE PARLAKLIK
     auto start = high_resolution_clock::now();
     changeBrightness(img, dst1, 0, img.rows, 1.0, 30);
     auto end = high_resolution_clock::now();
     auto duration1 = duration_cast<milliseconds>(end - start).count();
     cout << "1 Thread ile Parlaklik Degisimi Suresi: " << duration1 << " ms" << endl;
 
-    // 4 THREAD ILE PARLAKLIK
     int step = img.rows / 4;
     start = high_resolution_clock::now();
     thread t1(changeBrightness, cref(img), ref(dst4), 0, step, 1.0, 30);
@@ -65,24 +63,21 @@ int main() {
 
     cout << "=== GOREV 3 & 4: HISTOGRAM HESAPLAMA (1 THREAD VS 4 THREAD) ===" << endl;
     
-    // 1 THREAD ILE HISTOGRAM
     vector<int> hist1(256, 0);
     start = high_resolution_clock::now();
-    calcHist(img, 0, img.rows, hist1);
+    calculateLocalHistogram(img, 0, img.rows, hist1);
     end = high_resolution_clock::now();
     auto hist_dur1 = duration_cast<milliseconds>(end - start).count();
     cout << "1 Thread ile Histogram Hesaplama Suresi: " << hist_dur1 << " ms" << endl;
 
-    // 4 THREAD ILE HISTOGRAM
     vector<int> h1(256,0), h2(256,0), h3(256,0), h4(256,0), hist4(256,0);
     start = high_resolution_clock::now();
-    thread ht1(calcHist, cref(img), 0, step, ref(h1));
-    thread ht2(calcHist, cref(img), step, step*2, ref(h2));
-    thread ht3(calcHist, cref(img), step*2, step*3, ref(h3));
-    thread ht4(calcHist, cref(img), step*3, img.rows, ref(h4));
+    thread ht1(calculateLocalHistogram, cref(img), 0, step, ref(h1));
+    thread ht2(calculateLocalHistogram, cref(img), step, step*2, ref(h2));
+    thread ht3(calculateLocalHistogram, cref(img), step*2, step*3, ref(h3));
+    thread ht4(calculateLocalHistogram, cref(img), step*3, img.rows, ref(h4));
     ht1.join(); ht2.join(); ht3.join(); ht4.join();
     
-    // Alt histogramlari ana histogramda birlestir
     for(int i=0; i<256; i++) {
         hist4[i] = h1[i] + h2[i] + h3[i] + h4[i];
     }

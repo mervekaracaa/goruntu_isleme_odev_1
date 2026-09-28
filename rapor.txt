@@ -1,0 +1,11 @@
+=== GOREV 2: PARLAKLIK DEGISTIRME (1 THREAD VS 4 THREAD) ===
+1 Thread ile Parlaklik Degisimi Suresi: 54 ms
+4 Thread ile Parlaklik Degisimi Suresi: 46 ms
+--------------------------------------------------------
+=== GOREV 3 & 4: HISTOGRAM HESAPLAMA (1 THREAD VS 4 THREAD) ===
+1 Thread ile Histogram Hesaplama Suresi: 16 ms
+4 Thread ile Histogram Hesaplama ve Birlestirme Suresi: 15 ms
+--------------------------------------------------------
+=== GOREV 5: OZEL PARLAKLIK ISLEMLERI ===
+[KAYDEDILDI] gorev5_carpim075_arti20.jpg
+[KAYDEDILDI] gorev5_sadece_carpim075.jpg
