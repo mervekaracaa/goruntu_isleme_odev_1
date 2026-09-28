@@ -2,6 +2,8 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <functional> // ref() ve cref() için eklendi
+#include <algorithm>  // fill() fonksiyonu için eklendi
 #include <opencv2/opencv.hpp>
 
 using namespace std;
@@ -41,7 +43,7 @@ int main() {
     
     cout << "=== GOREV 2: PARLAKLIK DEGISTIRME (1 THREAD VS 4 THREAD) ===" << endl;
     
-    // 1 THREAD ILE PARLAKLIK (Rastgele bir parlaklik artisi: alpha=1.0, beta=30)
+    // 1 THREAD ILE PARLAKLIK
     auto start = high_resolution_clock::now();
     changeBrightness(img, dst1, 0, img.rows, 1.0, 30);
     auto end = high_resolution_clock::now();
@@ -90,13 +92,11 @@ int main() {
     cout << "--------------------------------------------------------" << endl;
 
     cout << "=== GOREV 5: OZEL PARLAKLIK ISLEMLERI ===" << endl;
-    // a) 0.75 ile carp, 20 ekle
     Mat finalImg1 = img.clone();
     changeBrightness(img, finalImg1, 0, img.rows, 0.75, 20);
     imwrite("/content/yeniboyut_resimler/gorev5_carpim075_arti20.jpg", finalImg1);
     cout << "[KAYDEDILDI] gorev5_carpim075_arti20.jpg" << endl;
 
-    // b) Sadece 0.75 ile carp
     Mat finalImg2 = img.clone();
     changeBrightness(img, finalImg2, 0, img.rows, 0.75, 0);
     imwrite("/content/yeniboyut_resimler/gorev5_sadece_carpim075.jpg", finalImg2);
