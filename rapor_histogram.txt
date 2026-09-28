@@ -1,0 +1,4 @@
+=== GOREV 2 & 3: HISTOGRAM HESAPLAMA (1 THREAD VS 4 THREAD) ===
+1 Thread ile Histogram Hesaplama Suresi: 12 ms
+4 Thread ile Histogram (Hesaplama+Birlestirme) Suresi: 10 ms
+[RESIM OLUSTURULDU] -> /content/yeni_klasor_resimler/histogram_grafik_sonucu.jpg
