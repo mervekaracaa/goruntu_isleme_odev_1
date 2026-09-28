@@ -1,30 +1,28 @@
 #include <iostream>
-#include <vector>
 #include <opencv2/opencv.hpp>
 
 using namespace std;
 using namespace cv;
 
 int main() {
-    string folder_path = "resimler/*.jpg";
-    vector<String> filenames;
-    glob(folder_path, filenames, false);
-
-    if (filenames.empty()) {
-        cout << "Resim bulunamadi!" << endl;
+    // Senin bash kısmına yapıştırdığın fotoğraf yolu buraya otomatik eklenecek
+    string img_path = "/content/resimler/c3045ae6-a3c5-4744-b342-2b317924f39a.jpeg";
+    
+    Mat img = imread(img_path);
+    if (img.empty()) {
+        cout << "HATA: Fotograf okunamadi! Yol yanlis olabilir: " << img_path << endl;
         return -1;
     }
 
-    for (size_t i = 0; i < filenames.size(); i++) {
-        Mat img = imread(filenames[i]);
-        if (img.empty()) continue;
+    // 1024x768 Boyutlandirma Islemi
+    Mat resized_img;
+    resize(img, resized_img, Size(1024, 768));
 
-        Mat resized_img;
-        resize(img, resized_img, Size(1024, 768));
-        imshow("Odev - 1024x768", resized_img);
-
-        int key = waitKey(0);
-        if (key == 27) break; // ESC tuşu çıkışı
-    }
+    // Yeni fotografi kaydet
+    string output_name = "boyutlandirilmis_resim.jpg";
+    imwrite(output_name, resized_img);
+    
+    cout << "[BASARILI] Fotograf 1024x768 boyutuna getirildi ve '" << output_name << "' olarak kaydedildi!" << endl;
+    
     return 0;
 }
