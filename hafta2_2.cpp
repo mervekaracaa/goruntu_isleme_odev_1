@@ -20,7 +20,7 @@ void changeBrightness(const Mat& src, Mat& dst, int startRow, int endRow, float 
     }
 }
 
-// --- GOREV 3: Parcali Histogram Hesaplama Fonksiyonu (İSİM DEĞİŞTİRİLDİ) ---
+// --- GOREV 3: Parcali Histogram Hesaplama Fonksiyonu ---
 void calculateLocalHistogram(const Mat& src, int startRow, int endRow, vector<int>& localHist) {
     fill(localHist.begin(), localHist.end(), 0);
     for (int r = startRow; r < endRow; r++) {
@@ -40,25 +40,32 @@ int main() {
     
     Mat dst1 = img.clone();
     Mat dst4 = img.clone();
+    int step = img.rows / 4;
     
-    cout << "=== GOREV 2: PARLAKLIK DEGISTIRME (1 THREAD VS 4 THREAD) ===" << endl;
+    cout << "=== GOREV 2: 4 FARKLI PARLAKLIK DEGISTIRME (1 THREAD VS 4 THREAD) ===" << endl;
     
+    // --- 1 THREAD İLE 4 FARKLI PARLAKLIK ---
+    // (Aynı işlemleri sırayla tek işlemci çekirdeğinde yapıyoruz)
     auto start = high_resolution_clock::now();
-    changeBrightness(img, dst1, 0, img.rows, 1.0, 30);
+    changeBrightness(img, dst1, 0, step,        1.0, 10);  // 1. Bölgeye +10 Parlaklık
+    changeBrightness(img, dst1, step, step*2,   1.0, 30);  // 2. Bölgeye +30 Parlaklık
+    changeBrightness(img, dst1, step*2, step*3, 1.0, 50);  // 3. Bölgeye +50 Parlaklık
+    changeBrightness(img, dst1, step*3, img.rows, 1.0, 70); // 4. Bölgeye +70 Parlaklık
     auto end = high_resolution_clock::now();
     auto duration1 = duration_cast<milliseconds>(end - start).count();
-    cout << "1 Thread ile Parlaklik Degisimi Suresi: " << duration1 << " ms" << endl;
+    cout << "1 Thread ile 4 Farkli Parlaklik Degisimi Suresi: " << duration1 << " ms" << endl;
 
-    int step = img.rows / 4;
+    // --- 4 THREAD İLE 4 FARKLI PARLAKLIK ---
+    // (Aynı işlemleri 4 farklı işlemci çekirdeğinde aynı anda yapıyoruz)
     start = high_resolution_clock::now();
-    thread t1(changeBrightness, cref(img), ref(dst4), 0, step, 1.0, 30);
-    thread t2(changeBrightness, cref(img), ref(dst4), step, step*2, 1.0, 30);
-    thread t3(changeBrightness, cref(img), ref(dst4), step*2, step*3, 1.0, 30);
-    thread t4(changeBrightness, cref(img), ref(dst4), step*3, img.rows, 1.0, 30);
+    thread t1(changeBrightness, cref(img), ref(dst4), 0, step,        1.0, 10);
+    thread t2(changeBrightness, cref(img), ref(dst4), step, step*2,   1.0, 30);
+    thread t3(changeBrightness, cref(img), ref(dst4), step*2, step*3, 1.0, 50);
+    thread t4(changeBrightness, cref(img), ref(dst4), step*3, img.rows, 1.0, 70);
     t1.join(); t2.join(); t3.join(); t4.join();
     end = high_resolution_clock::now();
     auto duration4 = duration_cast<milliseconds>(end - start).count();
-    cout << "4 Thread ile Parlaklik Degisimi Suresi: " << duration4 << " ms" << endl;
+    cout << "4 Thread ile 4 Farkli Parlaklik Degisimi Suresi: " << duration4 << " ms" << endl;
     cout << "--------------------------------------------------------" << endl;
 
     cout << "=== GOREV 3 & 4: HISTOGRAM HESAPLAMA (1 THREAD VS 4 THREAD) ===" << endl;
