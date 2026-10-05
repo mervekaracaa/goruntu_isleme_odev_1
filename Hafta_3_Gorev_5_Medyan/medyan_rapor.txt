@@ -1,0 +1,4 @@
+=== 3. HAFTA GOREV 5: MEDYAN FILTRE (5x5) ===
+[1/3] Resme Tuz ve Karabiber gurultusu (Olu Sensor) eklendi.
+[2/3] OpenCV 'medianBlur' calisti.
+[3/3] Kendi yazdigimiz 5x5 Medyan Filtre calisti.
