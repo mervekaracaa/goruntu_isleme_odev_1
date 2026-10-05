@@ -1,0 +1,3 @@
+=== 3. HAFTA GOREV 4: ORTALAMA FILTRE (MEAN FILTER) ===
+Adim 1: Resme yapay gurultu eklendi ve kaydedildi.
+Adim 2: 3x3 Ortalama Filtresi konvolusyon ile gezdirildi ve kaydedildi.
