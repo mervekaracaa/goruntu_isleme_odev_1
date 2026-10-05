@@ -1,0 +1,3 @@
+=== 3. HAFTA GOREV 3: CLAHE ===
+Adim 1: Hazir OpenCV fonksiyonu calisti ve kaydedildi.
+Adim 2: Kendi yazdigimiz CLAHE fonksiyonu calisti ve kaydedildi.

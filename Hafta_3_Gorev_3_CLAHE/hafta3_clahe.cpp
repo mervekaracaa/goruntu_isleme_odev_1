@@ -4,19 +4,15 @@
 using namespace std;
 using namespace cv;
 
-// --- HOCANIN ISTEDIGI KENDI CLAHE FONKSIYONUMUZ ---
 Mat kendiClaheFonksiyonum(Mat img) {
     int genislik = img.cols;
     int yukseklik = img.rows;
     
-    // Resmi 8x8'lik parçalara bölüyoruz
     int hucreGenisligi = genislik / 8;
     int hucreYuksekligi = yukseklik / 8;
     
-    // 8x8'lik ızgara için 256 değerlik histogram dizisi
     int hist[8][8][256] = {0};
     
-    // 1. ADIM: Her bölgenin histogramını tek tek çıkaralım
     for(int i = 0; i < yukseklik; i++) {
         for(int j = 0; j < genislik; j++) {
             int bolgeX = j / hucreGenisligi;
@@ -30,7 +26,6 @@ Mat kendiClaheFonksiyonum(Mat img) {
         }
     }
     
-    // 2. ADIM: Kırpma (Clipping) Limiti Uygulama
     int clipLimit = 2.0 * (hucreGenisligi * hucreYuksekligi) / 256;
     int cdf[8][8][256] = {0};
     
@@ -57,7 +52,6 @@ Mat kendiClaheFonksiyonum(Mat img) {
         }
     }
     
-    // 3. ADIM: Bilinear Interpolation
     Mat sonucImg = img.clone();
     
     for(int y = 0; y < yukseklik; y++) {
@@ -95,7 +89,6 @@ Mat kendiClaheFonksiyonum(Mat img) {
             sonucImg.at<uchar>(y, x) = saturate_cast<uchar>(yeniPiksel);
         }
     }
-    
     return sonucImg;
 }
 
@@ -103,20 +96,18 @@ int main() {
     string img_path = string(getenv("FOTOGRAF_YOLU"));
     Mat img = imread(img_path, IMREAD_GRAYSCALE);
     if (img.empty()) {
-        cout << "HATA: Fotograf okunamadi! Lutfen yolu kontrol et." << endl;
+        cout << "HATA: Fotograf okunamadi! Yol: " << img_path << endl;
         return -1;
     }
     
     cout << "=== 3. HAFTA GOREV 3: CLAHE ===" << endl;
 
-    // 1. OPENCV HAZIR FONKSIYONU KULLANARAK
     Ptr<CLAHE> clahe = createCLAHE(2.0, Size(8, 8));
     Mat opencv_clahe;
     clahe->apply(img, opencv_clahe);
     imwrite("/content/Hafta_3_Gorev_3_CLAHE/1_opencv_clahe_sonucu.jpg", opencv_clahe);
     cout << "Adim 1: Hazir OpenCV fonksiyonu calisti ve kaydedildi." << endl;
 
-    // 2. KENDI YAZDIGIMIZ (MANUEL) FONKSIYONU KULLANARAK
     Mat manuel_clahe = kendiClaheFonksiyonum(img);
     imwrite("/content/Hafta_3_Gorev_3_CLAHE/2_manuel_clahe_sonucu.jpg", manuel_clahe);
     cout << "Adim 2: Kendi yazdigimiz CLAHE fonksiyonu calisti ve kaydedildi." << endl;
