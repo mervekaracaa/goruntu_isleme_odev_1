@@ -1,0 +1,132 @@
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from google.colab import files
+
+# =====================================================================
+# 1. GÖRÜNTÜ YÜKLEME / ÖRNEK GÖRSEL OLUŞTURMA
+# =====================================================================
+print("Dilerseniz kendi görselinizi yükleyin (İptal ederseniz otomatik test görseli kullanılır):")
+uploaded = files.upload()
+
+if uploaded:
+    file_name = list(uploaded.keys())[0]
+    img_bgr = cv2.imread(file_name)
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+else:
+    # Otomatik test görseli
+    img_rgb = np.zeros((300, 400, 3), dtype=np.uint8)
+    for y in range(300):
+        for x in range(400):
+            img_rgb[y, x] = [int(255 * x / 400), int(255 * y / 300), 128]
+    cv2.circle(img_rgb, (100, 100), 50, (255, 30, 30), -1)
+    cv2.rectangle(img_rgb, (220, 50), (350, 150), (30, 255, 30), -1)
+    cv2.circle(img_rgb, (200, 220), 45, (30, 30, 255), -1)
+
+# =====================================================================
+# 2. RENK UZAYI DÖNÜŞÜM FONKSİYONLARI (COLOR SPACES)
+# =====================================================================
+
+def convert_color_spaces(rgb):
+    """
+    RGB görüntüyü görüntü işlemede en çok kullanılan 4 farklı renk formatına çevirir.
+    """
+    # 1. HSV (Hue: Renk tonu, Saturation: Doygunluk, Value: Parlaklık)
+    # Nesne takibi ve renk maskelemede kullanılır.
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+
+    # 2. LAB (L: Parlaklık, A: Yeşil-Kırmızı ekseni, B: Mavi-Sarı ekseni)
+    # İnsan gözünün renk algısına en yakın, aydınlatmadan bağımsız uzaydır.
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
+
+    # 3. YCrCb (Y: Parlaklık, Cr: Kırmızı farkı, Cb: Mavi farkı)
+    # JPEG sıkıştırmasında ve ten rengi (skin detection) tespitinde kullanılır.
+    ycrcb = cv2.cvtColor(rgb, cv2.COLOR_RGB2YCrCb)
+
+    # 4. CMYK (Cyan, Magenta, Yellow, Key/Black - Baskı formatı)
+    # Sıfırdan matematiksel dönüşüm:
+    rgb_norm = rgb.astype(np.float32) / 255.0
+    K = 1.0 - np.max(rgb_norm, axis=2)
+    C = (1.0 - rgb_norm[:, :, 0] - K) / (1.0 - K + 1e-8)
+    M = (1.0 - rgb_norm[:, :, 1] - K) / (1.0 - K + 1e-8)
+    Y = (1.0 - rgb_norm[:, :, 2] - K) / (1.0 - K + 1e-8)
+    cmyk = (np.stack([C, M, Y, K], axis=2) * 255).astype(np.uint8)
+
+    return {"HSV": hsv, "LAB": lab, "YCrCb": ycrcb, "CMYK": cmyk}
+
+color_spaces = convert_color_spaces(img_rgb)
+
+# =====================================================================
+# 3. GÖRSELLEŞTİRME (Farklı Renk Formatları & Kanalları)
+# =====================================================================
+# Örnek olarak HSV ve LAB uzaylarının kanallarını ayrı ayrı inceleyelim:
+fig, axes = plt.subplots(3, 3, figsize=(15, 12))
+
+# Satır 1: Orijinal RGB, HSV ve LAB Genel Görünüm
+axes[0, 0].imshow(img_rgb)
+axes[0, 0].set_title("Orijinal RGB")
+axes[0, 0].axis("off")
+
+axes[0, 1].imshow(color_spaces["HSV"])
+axes[0, 1].set_title("HSV Formatı (Bütünleşik)")
+axes[0, 1].axis("off")
+
+axes[0, 2].imshow(color_spaces["LAB"])
+axes[0, 2].set_title("LAB Formatı (Bütünleşik)")
+axes[0, 2].axis("off")
+
+# Satır 2: HSV Kanalları (H - S - V)
+h, s, v = cv2.split(color_spaces["HSV"])
+axes[1, 0].imshow(h, cmap='hsv')
+axes[1, 0].set_title("HSV: H Kanalı (Renk Özü)")
+axes[1, 0].axis("off")
+
+axes[1, 1].imshow(s, cmap='gray')
+axes[1, 1].set_title("HSV: S Kanalı (Doygunluk)")
+axes[1, 1].axis("off")
+
+axes[1, 2].imshow(v, cmap='gray')
+axes[1, 2].set_title("HSV: V Kanalı (Parlaklık Değeri)")
+axes[1, 2].axis("off")
+
+# Satır 3: LAB Kanalları (L - A - B)
+l, a, b = cv2.split(color_spaces["LAB"])
+axes[2, 0].imshow(l, cmap='gray')
+axes[2, 0].set_title("LAB: L Kanalı (Luminance - Işık)")
+axes[2, 0].axis("off")
+
+axes[2, 1].imshow(a, cmap='coolwarm')
+axes[2, 1].set_title("LAB: A Kanalı (Yeşil <-> Kırmızı)")
+axes[2, 1].axis("off")
+
+axes[2, 2].imshow(b, cmap='coolwarm')
+axes[2, 2].set_title("LAB: B Kanalı (Mavi <-> Sarı)")
+axes[2, 2].axis("off")
+
+plt.tight_layout()
+plt.show()
+
+# =====================================================================
+# 4. DOSYA FORMATI DÖNÜŞTÜRÜP KAYDETME (JPG, PNG, WEBP, BMP)
+# =====================================================================
+def save_in_different_formats(img_rgb_input):
+    """
+    Görüntüyü farklı dosya uzantılarına çevirir ve kaydeder.
+    """
+    bgr_to_save = cv2.cvtColor(img_rgb_input, cv2.COLOR_RGB2BGR)
+    
+    # 1. PNG olarak kaydet (Kayıpsız / Lossless)
+    cv2.imwrite("cikti_resim.png", bgr_to_save)
+    
+    # 2. JPG olarak kaydet (%90 kalite sıkıştırmasıyla)
+    cv2.imwrite("cikti_resim.jpg", bgr_to_save, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    
+    # 3. WEBP olarak kaydet (Modern web formatı)
+    cv2.imwrite("cikti_resim.webp", bgr_to_save, [cv2.IMWRITE_WEBP_QUALITY, 90])
+    
+    # 4. BMP olarak kaydet (Sıkıştırmasız ham format)
+    cv2.imwrite("cikti_resim.bmp", bgr_to_save)
+    
+    print("\n✅ Resim başarıyla PNG, JPG, WEBP ve BMP formatlarına dönüştürüldü ve kaydedildi!")
+
+save_in_different_formats(img_rgb)
