@@ -1,1 +1,42 @@
+def canny_from_scratch(image_gray):
+    # 1. Gürültü Bastırma
+    blurred, _ = gaussian_blur_5x5(image_gray, sigma=1.4)
+    
+    # 2. Sobel Gradyan Hesaplama
+    gradient_mag, gradient_angle = sobel_gradients(blurred)
+    
+    # 3. Non-Maximum Suppression
+    nms_image = non_maximum_suppression(gradient_mag, gradient_angle)
+    
+    # 4. Hysteresis Thresholding
+    final_edges = hysteresis_thresholding(nms_image, low_ratio=0.15, high_ratio=0.25)
+    
+    return blurred, gradient_mag, nms_image, final_edges
 
+# Örnek bir görüntü yükleyelim (OpenCV standart test görseli)
+url = "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/building.jpg"
+req = urllib.request.urlopen(url)
+arr = np.asarray(bytearray(req.read()), dtype=np.uint8)
+img_gray = cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
+
+# Algoritmayı çalıştır
+blurred, grad, nms, edges = canny_from_scratch(img_gray)
+
+# Sonuçları Görselleştirme
+titles = [
+    '1. Orijinal (Gri)', 
+    '2. 5x5 Gauss Filtresi', 
+    '3. Sobel Gradyan Büyüklüğü', 
+    '4. Non-Max Suppression', 
+    '5. Hysteresis (Sonuç)'
+]
+images = [img_gray, blurred, grad, nms, edges]
+
+plt.figure(figsize=(20, 5))
+for i in range(5):
+    plt.subplot(1, 5, i + 1)
+    plt.imshow(images[i], cmap='gray')
+    plt.title(titles[i], fontsize=11)
+    plt.axis('off')
+plt.tight_layout()
+plt.show()
