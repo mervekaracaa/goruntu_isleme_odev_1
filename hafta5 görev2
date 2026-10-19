@@ -1,0 +1,282 @@
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+from google.colab import files
+
+# =====================================================================
+# BÖLÜM 1: RENKLİ GÖRÜNTÜ İŞLEMLERİ (GRİYE ÇEVİRME & HISTOGRAM)
+# =====================================================================
+
+def rgb_to_grayscale(img_rgb):
+    """
+    Renkli RGB görüntüyü standart parlaklık (Luminance) formülüyle
+    sıfırdan siyah-beyaza (gri tonlamaya) dönüştürür:
+    Gray = 0.299*R + 0.587*G + 0.114*B
+    """
+    R = img_rgb[:, :, 0].astype(np.float64)
+    G = img_rgb[:, :, 1].astype(np.float64)
+    B = img_rgb[:, :, 2].astype(np.float64)
+    
+    gray = 0.299 * R + 0.587 * G + 0.114 * B
+    return gray.astype(np.float64)
+
+
+def plot_color_histograms(img_rgb):
+    """
+    Renkli görüntünün R, G ve B kanalları için ayrı ayrı piksel histogramı çizer.
+    """
+    colors = ('r', 'g', 'b')
+    channel_names = ('Kırmızı (Red)', 'Yeşil (Green)', 'Mavi (Blue)')
+    
+    plt.figure(figsize=(10, 4))
+    for i, (col, name) in enumerate(zip(colors, channel_names)):
+        # Her kanal için 0-255 aralığında histogram hesabı
+        hist, bins = np.histogram(img_rgb[:, :, i], bins=256, range=[0, 256])
+        plt.plot(hist, color=col, label=name)
+        
+    plt.title("RGB Kanalları Histogramı")
+    plt.xlabel("Piksel Değeri (0 - 255)")
+    plt.ylabel("Piksel Sayısı (Frekans)")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
+
+# =====================================================================
+# BÖLÜM 2: 2B KONVOLÜSYON FONKSİYONU (SIFIRDAN)
+# =====================================================================
+
+def convolve2d(image, kernel):
+    """
+    NumPy kullanarak sıfırdan 2B konvolüsyon işlemi uygular.
+    Kenar taşmalarını önlemek için kenar kopyalama (edge padding) yapar.
+    """
+    h, w = image.shape
+    kh, kw = kernel.shape
+    pad_h, pad_w = kh // 2, kw // 2
+    
+    # Kenarları uzatarak doldurma
+    padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='edge')
+    output = np.zeros((h, w), dtype=np.float64)
+    
+    # Vektörel hızlı konvolüsyon
+    for i in range(kh):
+        for j in range(kw):
+            output += kernel[i, j] * padded[i:i+h, j:j+w]
+            
+    return output
+
+
+# =====================================================================
+# BÖLÜM 3: CANNY ALGORİTMASI ALT FONKSİYONLARI
+# =====================================================================
+
+# 1. ADIM: Gürültü Bastırma (5x5 Gauss Filtresi)
+def gaussian_blur_5x5(image, sigma=1.4):
+    """
+    5x5 Gauss çekirdeği üretir ve görüntüye konvolüsyon uygulayarak yumuşatır.
+    """
+    # 5x5 Gauss çekirdeği formülü: G(x,y) = (1 / 2*pi*sigma^2) * exp(-(x^2+y^2)/(2*sigma^2))
+    size = 5
+    kernel = np.zeros((size, size), dtype=np.float64)
+    offset = size // 2
+    
+    for x in range(-offset, offset + 1):
+        for y in range(-offset, offset + 1):
+            kernel[x + offset, y + offset] = np.exp(-(x**2 + y**2) / (2 * (sigma**2)))
+            
+    # Çekirdek toplamını 1'e normalize et
+    kernel = kernel / np.sum(kernel)
+    
+    # Konvolüsyon uygula
+    blurred = convolve2d(image, kernel)
+    return blurred
+
+
+# 2. ADIM: Sobel Filtresi ile Gradyan ve Açı Hesaplama
+def sobel_gradients(image):
+    """
+    Sobel X ve Y filtreleri ile yatay/dikey gradyanları,
+    gradyan büyüklüğünü (magnitude) ve yönünü (angle) hesaplar.
+    """
+    # Sobel çekirdekleri
+    Kx = np.array([
+        [-1, 0, 1],
+        [-2, 0, 2],
+        [-1, 0, 1]
+    ], dtype=np.float64)
+
+    Ky = np.array([
+        [ 1,  2,  1],
+        [ 0,  0,  0],
+        [-1, -2, -1]
+    ], dtype=np.float64)
+    
+    # Gradyan konvolüsyonları
+    Gx = convolve2d(image, Kx)
+    Gy = convolve2d(image, Ky)
+    
+    # Büyüklük: sqrt(Gx^2 + Gy^2)
+    magnitude = np.hypot(Gx, Gy)
+    # [0, 255] aralığına normalize et
+    magnitude = (magnitude / (magnitude.max() + 1e-8)) * 255.0
+    
+    # Açı: arctan2(Gy, Gx) radyan -> dereceye çevir
+    angle = np.arctan2(Gy, Gx) * (180.0 / np.pi)
+    # Negatif açıları [0, 180] aralığına taşı
+    angle[angle < 0] += 180.0
+    
+    return magnitude, angle
+
+
+# 3. ADIM: Non-Maximum Suppression (Maksimum Olmayanları Bastırma)
+def non_maximum_suppression(magnitude, angle):
+    """
+    Kenarları 1 piksel kalınlığına inceltmek için gradyan yönündeki
+    yerel maksimum olmayan pikselleri sıfırlar.
+    """
+    h, w = magnitude.shape
+    nms = np.zeros((h, w), dtype=np.float64)
+    
+    for i in range(1, h - 1):
+        for j in range(1, w - 1):
+            q = 255.0
+            r = 255.0
+            ang = angle[i, j]
+            
+            # 0 Derece (Yatay Yön / Doğu-Batı)
+            if (0 <= ang < 22.5) or (157.5 <= ang <= 180):
+                q = magnitude[i, j + 1]
+                r = magnitude[i, j - 1]
+            # 45 Derece (Köşegen / Kuzeydoğu-Güneybatı)
+            elif 22.5 <= ang < 67.5:
+                q = magnitude[i - 1, j + 1]
+                r = magnitude[i + 1, j - 1]
+            # 90 Derece (Dikey Yön / Kuzey-Güney)
+            elif 67.5 <= ang < 112.5:
+                q = magnitude[i - 1, j]
+                r = magnitude[i + 1, j]
+            # 135 Derece (Ters Köşegen / Kuzeybatı-Güneydoğu)
+            elif 112.5 <= ang < 157.5:
+                q = magnitude[i - 1, j - 1]
+                r = magnitude[i + 1, j + 1]
+                
+            # Eğer mevcut piksel, yönündeki komşularından büyükse koru, değilse sil
+            if magnitude[i, j] >= q and magnitude[i, j] >= r:
+                nms[i, j] = magnitude[i, j]
+            else:
+                nms[i, j] = 0.0
+                
+    return nms
+
+
+# 4. ADIM: Hysteresis Thresholding (Çift Eşikleme ve Kenar Takibi)
+def hysteresis_thresholding(nms_image, low_ratio=0.08, high_ratio=0.20):
+    """
+    Çift eşikleme ile güçlü ve zayıf kenarları ayırır.
+    Güçlü kenarlara bağlı olan zayıf kenarları tutar, diğerlerini eler.
+    """
+    high_threshold = nms_image.max() * high_ratio
+    low_threshold = high_threshold * low_ratio
+    
+    h, w = nms_image.shape
+    output = np.zeros((h, w), dtype=np.uint8)
+    
+    strong = 255
+    weak = 75
+    
+    # Eşik değerlerine göre etiketleme
+    strong_i, strong_j = np.where(nms_image >= high_threshold)
+    weak_i, weak_j = np.where((nms_image >= low_threshold) & (nms_image < high_threshold))
+    
+    output[strong_i, strong_j] = strong
+    output[weak_i, weak_j] = weak
+    
+    # Kenar Takibi (Hysteresis Tracking):
+    # Bir zayıf piksel, 8-komşuluğunda en az bir güçlü piksel barındırıyorsa güçlü yapılır
+    for i in range(1, h - 1):
+        for j in range(1, w - 1):
+            if output[i, j] == weak:
+                neighborhood = output[i-1:i+2, j-1:j+2]
+                if np.any(neighborhood == strong):
+                    output[i, j] = strong
+                else:
+                    output[i, j] = 0
+                    
+    # Hâlâ zayıf kalan bağlantısız pikselleri sıfırla
+    output[output == weak] = 0
+    return output
+
+
+# =====================================================================
+# BÖLÜM 4: TEST VE GÖRSELLEŞTİRME
+# =====================================================================
+
+print("Lütfen işlemek istediğiniz renkli görseli yükleyin:")
+uploaded = files.upload()
+
+if uploaded:
+    file_name = list(uploaded.keys())[0]
+    img_bgr = cv2.imread(file_name)
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    
+    # İşlem süresini makul tutmak için çok büyükse yeniden boyutlandıralım (maks genişlik 500px)
+    max_dim = 500
+    h, w = img_rgb.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        img_rgb = cv2.resize(img_rgb, (int(w * scale), int(h * scale)))
+
+    # 1. Histogram Çizimi
+    print("\n1. RGB Kanalları Histogramı çiziliyor...")
+    plot_color_histograms(img_rgb)
+
+    # 2. Griye Çevirme (Sıfırdan formülle)
+    print("2. Görüntü sıfırdan siyah-beyaza çevriliyor...")
+    gray_img = rgb_to_grayscale(img_rgb)
+
+    # 3. Canny Adım 1: Gauss Bulanıklaştırma (5x5)
+    print("3. Gauss filtresi uygulanıyor (Gürültü bastırma)...")
+    blurred_img = gaussian_blur_5x5(gray_img, sigma=1.4)
+
+    # 4. Canny Adım 2: Sobel Gradyanları
+    print("4. Sobel filtresi ile gradyan büyüklüğü ve yönü hesaplanıyor...")
+    magnitude, angle = sobel_gradients(blurred_img)
+
+    # 5. Canny Adım 3: Non-Maximum Suppression (NMS)
+    print("5. Non-Maximum Suppression (NMS) ile kenarlar inceltiliyor...")
+    nms_img = non_maximum_suppression(magnitude, angle)
+
+    # 6. Canny Adım 4: Hysteresis Thresholding
+    print("6. Hysteresis Thresholding ile kenar takibi tamamlanıyor...")
+    canny_result = hysteresis_thresholding(nms_img, low_ratio=0.1, high_ratio=0.25)
+
+    # --- TÜM ADIMLARIN KARŞILAŞTIRMALI ÇIKTISI ---
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+
+    axes[0, 0].imshow(img_rgb)
+    axes[0, 0].set_title("1. Orijinal Renkli Görüntü")
+    axes[0, 0].axis("off")
+
+    axes[0, 1].imshow(gray_img, cmap='gray')
+    axes[0, 1].set_title("2. Siyah-Beyaz (Grayscale)")
+    axes[0, 1].axis("off")
+
+    axes[0, 2].imshow(blurred_img, cmap='gray')
+    axes[0, 2].set_title("3. 5x5 Gauss Filtresi Sonucu")
+    axes[0, 2].axis("off")
+
+    axes[1, 0].imshow(magnitude, cmap='gray')
+    axes[1, 0].set_title("4. Sobel Gradyan Büyüklüğü")
+    axes[1, 0].axis("off")
+
+    axes[1, 1].imshow(nms_img, cmap='gray')
+    axes[1, 1].set_title("5. Non-Maximum Suppression (NMS)")
+    axes[1, 1].axis("off")
+
+    axes[1, 2].imshow(canny_result, cmap='gray')
+    axes[1, 2].set_title("6. Hysteresis (Final Canny Kenarları)")
+    axes[1, 2].axis("off")
+
+    plt.tight_layout()
+    plt.show()
