@@ -1,0 +1,91 @@
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from google.colab import files
+
+# =====================================================================
+# 1. GÖRSELLERİ YÜKLEME
+# =====================================================================
+print("Lütfen indirdiğiniz 5 adet X-ray görselini topluca seçip yükleyin:")
+uploaded = files.upload()
+
+image_names = list(uploaded.keys())[:5]
+
+# =====================================================================
+# 2. GÜVENLİK STANDARDI RENK PALETİ (256x3 RGB DİZİSİ)
+# =====================================================================
+def build_airport_security_lut_rgb():
+    """
+    Doğrudan RGB formatında (256, 3) boyutunda renk tablosu üretir.
+    - 0  - 70   : Ağır metaller / Bıçak gövdeleri -> Koyu Mavi / Lacivert
+    - 71 - 130  : İnce metaller / Alaşımlar       -> Açık Mavi / Turkuaz
+    - 131 - 180 : İnorganik / Karışık maddeler    -> Yeşil
+    - 181 - 235 : Organik maddeler (Patlayıcılar) -> Turuncu / Kahverengi
+    - 236 - 255 : Boş alan / Arka plan            -> Açık Fon / Beyaz
+    """
+    lut = np.zeros((256, 3), dtype=np.uint8)
+    for i in range(256):
+        if i < 70:      # Yüksek Soğurma: Ağır metaller / Bıçak gövdesi
+            ratio = i / 70.0
+            # RGB: Koyu mavi / Lacivert
+            lut[i] = [0, int(30 * ratio), int(120 + 100 * ratio)]
+        elif i < 130:   # İnce metaller
+            ratio = (i - 70) / 60.0
+            # RGB: Açık mavi / Turkuaz
+            lut[i] = [int(20 * ratio), int(100 + 80 * ratio), int(220 - 50 * ratio)]
+        elif i < 180:   # İnorganik (Cam, alüminyum)
+            ratio = (i - 130) / 50.0
+            # RGB: Yeşil
+            lut[i] = [int(40 + 30 * ratio), int(180 + 40 * ratio), int(30 * (1 - ratio))]
+        elif i < 235:   # Organik maddeler (Patlayıcı, plastik, su)
+            ratio = (i - 180) / 55.0
+            # RGB: Turuncu (Yüksek R, orta G, düşük B)
+            lut[i] = [int(210 + 35 * ratio), int(120 + 40 * ratio), 30]
+        else:           # Boşluk / Arka plan
+            lut[i] = [250, 252, 255]
+    return lut
+
+security_lut_rgb = build_airport_security_lut_rgb()
+
+# =====================================================================
+# 3. GÖRÜNTÜLERİ İŞLEME VE GÖRSELLEŞTİRME
+# =====================================================================
+fig, axes = plt.subplots(len(image_names), 4, figsize=(20, 5 * len(image_names)))
+if len(image_names) == 1:
+    axes = np.expand_dims(axes, axis=0)
+
+for idx, img_name in enumerate(image_names):
+    # 1. Orijinal Renkli Görüntü
+    bgr_img = cv2.imread(img_name)
+    rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
+
+    # 2. Gri Tonlama (Grayscale)
+    gray_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2GRAY)
+
+    # 3. Yöntem 1: Güvenlik Paleti (NumPy İndeksleme ile - Hata vermez)
+    # Tek kanallı gray_img doğrudan (256, 3)'lük LUT üzerinden eşlenir
+    custom_rgb = security_lut_rgb[gray_img]
+
+    # 4. Yöntem 2: Spektral (JET) Palet
+    jet_bgr = cv2.applyColorMap(gray_img, cv2.COLORMAP_JET)
+    jet_rgb = cv2.cvtColor(jet_bgr, cv2.COLOR_BGR2RGB)
+
+    # Görselleştirme
+    axes[idx, 0].imshow(rgb_img)
+    axes[idx, 0].set_title(f"Görsel {idx+1}: Orijinal (ThreadsRGB)")
+    axes[idx, 0].axis("off")
+
+    axes[idx, 1].imshow(gray_img, cmap='gray')
+    axes[idx, 1].set_title("1. Gri Tonlu (Grayscale)")
+    axes[idx, 1].axis("off")
+
+    axes[idx, 2].imshow(custom_rgb)
+    axes[idx, 2].set_title("2. Güvenlik Standart Paleti (LUT)")
+    axes[idx, 2].axis("off")
+
+    axes[idx, 3].imshow(jet_rgb)
+    axes[idx, 3].set_title("3. Spektral Renklendirme (JET)")
+    axes[idx, 3].axis("off")
+
+plt.tight_layout()
+plt.show()
