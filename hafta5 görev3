@@ -1,0 +1,114 @@
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+# =====================================================================
+# 1. ÖRNEK RGB GÖRÜNTÜ OLUŞTURMA
+# =====================================================================
+def create_sample_rgb_image(width=400, height=300):
+    """
+    Test için zengin renkli (gradyanlar ve renkli geometrik şekiller)
+    3 kanallı (RGB) bir görsel oluşturur.
+    """
+    img = np.zeros((height, width, 3), dtype=np.uint8)
+
+    # Renk gradyanı arka planı (Kırmızı ve Mavi geçişi)
+    for y in range(height):
+        for x in range(width):
+            img[y, x] = [int(255 * x / width), int(255 * y / height), 128]
+
+    # Renkli şekiller ekleyelim
+    cv2.circle(img, (100, 100), 50, (255, 0, 0), -1)      # Kırmızı daire
+    cv2.rectangle(img, (220, 50), (350, 150), (0, 255, 0), -1)  # Yeşil dikdörtgen
+    cv2.circle(img, (200, 220), 45, (0, 0, 255), -1)      # Mavi daire
+    cv2.putText(img, "RGB Test", (110, 280), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 0), 3)
+
+    return img
+
+
+# =====================================================================
+# 2. SIFIRDAN GRİ DÖNÜŞÜM FONKSİYONU (ITU-R BT.601 STANDARDI)
+# =====================================================================
+def custom_rgb_to_grayscale(img_rgb):
+    """
+    OpenCV'nin de arka planda kullandığı uluslararası standart
+    ITU-R BT.601 ağırlıkları ile tek kanallı gri görüntü üretir:
+    Y = 0.299 * R + 0.587 * G + 0.114 * B
+    """
+    # Taşma ve hassasiyet kaybını önlemek için float64'e çeviriyoruz
+    R = img_rgb[:, :, 0].astype(np.float64)
+    G = img_rgb[:, :, 1].astype(np.float64)
+    B = img_rgb[:, :, 2].astype(np.float64)
+
+    # Ağırlıklı ortalama formülü
+    gray_float = 0.299 * R + 0.587 * G + 0.114 * B
+
+    # En yakın tam sayıya yuvarlayıp uint8 (0-255) aralığına getiriyoruz
+    gray_uint8 = np.round(gray_float).astype(np.uint8)
+
+    return gray_uint8
+
+
+# =====================================================================
+# 3. İŞLEMLER VE HATA HESAPLAMA
+# =====================================================================
+
+# 1. RGB Görseli oluştur
+rgb_image = create_sample_rgb_image()
+
+# 2. YÖNTEM A: OpenCV hazır fonksiyonu ile griye çevirme
+opencv_gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
+
+# 3. YÖNTEM B: Kendi yazdığımız fonksiyon ile griye çevirme
+custom_gray = custom_rgb_to_grayscale(rgb_image)
+
+# 4. HATA HESAPLAMA: Eşleşen piksellerin mutlak farklarının toplamı (SAD)
+# uint8 çıkarma işleminde negatif sayıların taşmasını önlemek için int32 yapıyoruz
+pixel_diff = np.abs(opencv_gray.astype(np.int32) - custom_gray.astype(np.int32))
+
+total_absolute_error = np.sum(pixel_diff)       # Toplam Mutlak Hata (SAD)
+mean_absolute_error = np.mean(pixel_diff)        # Ortalama Mutlak Hata (MAE)
+max_pixel_diff = np.max(pixel_diff)             # Maksimum Piksel Farkı
+matching_pixels = np.sum(pixel_diff == 0)       # Birebir aynı olan piksel sayısı
+total_pixels = rgb_image.shape[0] * rgb_image.shape[1]
+
+# Raporlama Çıktısı
+print("=" * 60)
+print("             GRİ DÖNÜŞÜM HATA ANALİZ RAPORU")
+print("=" * 60)
+print(f"Toplam Piksel Sayısı                : {total_pixels:,}")
+print(f"Birebir Eşleşen Piksel Sayısı       : {matching_pixels:,} (%{(matching_pixels/total_pixels)*100:.2f})")
+print(f"Maksimum Tek Piksel Farkı           : {max_pixel_diff}")
+print(f"Ortalama Mutlak Hata (MAE)          : {mean_absolute_error:.5f}")
+print(f"MUTLAK FARKLARIN TOPLAMI (HATA)     : {total_absolute_error}")
+print("=" * 60)
+
+
+# =====================================================================
+# 4. GÖRSELLEŞTİRME VE FARK HARİTASI
+# =====================================================================
+fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+
+# Orijinal RGB
+axes[0].imshow(rgb_image)
+axes[0].set_title(f"1. Orijinal RGB\nŞekil: {rgb_image.shape}")
+axes[0].axis("off")
+
+# OpenCV Gri
+axes[1].imshow(opencv_gray, cmap='gray')
+axes[1].set_title(f"2. OpenCV (cvtColor)\nŞekil: {opencv_gray.shape}")
+axes[1].axis("off")
+
+# Kendi Fonksiyonumuz
+axes[2].imshow(custom_gray, cmap='gray')
+axes[2].set_title(f"3. Kendi Fonksiyonumuz\nŞekil: {custom_gray.shape}")
+axes[2].axis("off")
+
+# İki Resim Arasındaki Fark Haritası
+diff_display = axes[3].imshow(pixel_diff, cmap='hot', vmin=0, vmax=2)
+axes[3].set_title(f"4. Mutlak Fark Haritası\nToplam Hata: {total_absolute_error}")
+axes[3].axis("off")
+plt.colorbar(diff_display, ax=axes[3], fraction=0.046, pad=0.04)
+
+plt.tight_layout()
+plt.show()
