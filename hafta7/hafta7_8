@@ -1,0 +1,73 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# 1. Gauss Gürültüsü Ekleme Fonksiyonu
+def add_gaussian_noise(image, std_dev=25.0):
+    """Resme normal dağılımlı (Gauss) gürültü ekler. Kuvveti standart sapma (std_dev) belirler."""
+    # Resimle aynı boyutta Gauss gürültüsü üret
+    noise = np.random.normal(0, std_dev, image.shape)
+    # Gürültüyü ekle ve [0, 255] aralığında kırp (clip)
+    noisy_image = np.clip(image + noise, 0, 255).astype(np.uint8)
+    return noisy_image
+
+# 2. Salt and Pepper (Tuz ve Biber) Gürültüsü Ekleme Fonksiyonu
+def add_salt_and_pepper_noise(image, noise_ratio=0.05):
+    """Resme % olarak verilen oranda (noise_ratio) siyah ve beyaz pikseller ekler."""
+    noisy_image = np.copy(image)
+
+    # Eklenecek toplam tuz ve biber piksel sayısını hesapla
+    num_salt = np.ceil(noise_ratio * image.size * 0.5)
+    num_pepper = np.ceil(noise_ratio * image.size * 0.5)
+
+    # Tuz (Beyaz - 255) pikselleri rastgele yerleştir
+    coords_salt = [np.random.randint(0, i, int(num_salt)) for i in image.shape]
+    noisy_image[tuple(coords_salt)] = 255
+
+    # Biber (Siyah - 0) pikselleri rastgele yerleştir
+    coords_pepper = [np.random.randint(0, i, int(num_pepper)) for i in image.shape]
+    noisy_image[tuple(coords_pepper)] = 0
+
+    return noisy_image
+
+# --- Gürültüleri Uygulama ---
+# (Önceki adımda tanımlı olan 'resim' ve 'compute_2d_dft' fonksiyonunu kullanıyoruz)
+
+gauss_resim = add_gaussian_noise(resim, std_dev=40.0)       # Kuvvetli Gauss gürültüsü
+sp_resim = add_salt_and_pepper_noise(resim, noise_ratio=0.1) # %10 Tuz-Biber gürültüsü
+
+# --- DFT İşlemleri ---
+_, mag_orijinal = compute_2d_dft(resim)
+_, mag_gauss = compute_2d_dft(gauss_resim)
+_, mag_sp = compute_2d_dft(sp_resim)
+
+# Logaritmik dönüşümler
+log_orijinal = 20 * np.log(mag_orijinal + 1e-8)
+log_gauss = 20 * np.log(mag_gauss + 1e-8)
+log_sp = 20 * np.log(mag_sp + 1e-8)
+
+# --- Görselleştirme (3x2 Grid) ---
+fig, axes = plt.subplots(3, 2, figsize=(12, 14))
+
+# Orijinal
+axes[0, 0].imshow(resim, cmap='gray')
+axes[0, 0].set_title('Orijinal Resim')
+axes[0, 1].imshow(log_orijinal, cmap='gray')
+axes[0, 1].set_title('Orijinal Spektrum')
+
+# Gauss
+axes[1, 0].imshow(gauss_resim, cmap='gray')
+axes[1, 0].set_title('Gauss Gürültüsü (std_dev=40)')
+axes[1, 1].imshow(log_gauss, cmap='gray')
+axes[1, 1].set_title('Gauss Spektrumu')
+
+# Salt & Pepper
+axes[2, 0].imshow(sp_resim, cmap='gray')
+axes[2, 0].set_title('Salt & Pepper Gürültüsü (%10)')
+axes[2, 1].imshow(log_sp, cmap='gray')
+axes[2, 1].set_title('Salt & Pepper Spektrumu')
+
+for ax in axes.flat:
+    ax.axis('off')
+
+plt.tight_layout()
+plt.show()
