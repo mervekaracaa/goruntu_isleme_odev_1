@@ -1,0 +1,46 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import cv2
+from google.colab import files
+
+# 1. DFT Fonksiyonu (Önceki adımdaki fonksiyonumuz)
+def compute_2d_dft(image):
+    f_transform = np.fft.fft2(image)
+    f_shift = np.fft.fftshift(f_transform)
+    magnitude_spectrum = np.abs(f_shift)
+    return f_shift, magnitude_spectrum
+
+# 2. Kullanıcıdan resim yüklemesini iste
+print("Lütfen analiz etmek istediğiniz resmi seçin (Dosya Seç butonuna tıklayın):")
+uploaded = files.upload()
+
+# Yüklenen dosyanın adını al (Sözlükten ilk anahtarı çeker)
+dosya_adi = next(iter(uploaded))
+
+# 3. Resmi OpenCV ile oku (DFT için Gri Tonlamalı - 0 parametresi gereklidir)
+resim = cv2.imread(dosya_adi, 0)
+
+if resim is None:
+    print("Resim okunamadı! Lütfen geçerli bir görüntü dosyası yüklediğinizden emin olun.")
+else:
+    # 4. DFT İşlemini Uygula
+    f_shift, harmonik_matris = compute_2d_dft(resim)
+
+    # Görselleştirme için logaritmik dönüşüm
+    log_harmonik = 20 * np.log(harmonik_matris + 1e-8)
+
+    # 5. Görselleştirme
+    plt.figure(figsize=(12, 6))
+
+    plt.subplot(1, 2, 1)
+    plt.imshow(resim, cmap='gray')
+    plt.title('Yüklediğiniz Resim (Uzamsal Alan)')
+    plt.axis('off')
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(log_harmonik, cmap='gray')
+    plt.title('Frekans Spektrumu (2D DFT)')
+    plt.axis('off')
+
+    plt.tight_layout()
+    plt.show()
