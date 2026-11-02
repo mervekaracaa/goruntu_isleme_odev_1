@@ -1,0 +1,69 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage import data
+
+def apply_frequency_filter(image, filter_mask):
+    """Görüntüyü frekans uzayına çevirir, maskeyi uygular ve geri döndürür."""
+    f = np.fft.fft2(image)
+    fshift = np.fft.fftshift(f)
+    fshift_filtered = fshift * filter_mask
+    img_back = np.fft.ifft2(np.fft.ifftshift(fshift_filtered))
+    return np.abs(img_back)
+
+def add_gaussian_noise(image, std_dev=25.0):
+    noise = np.random.normal(0, std_dev, image.shape)
+    return np.clip(image + noise, 0, 255).astype(np.uint8)
+
+# 1. Kütüphanedeki hazır test resmini kullan (Dosya seçme adımı iptal edildi)
+orijinal_resim = data.camera() 
+
+# 2. Gürültülü Halini Oluşturma
+gurultulu_resim = add_gaussian_noise(orijinal_resim, std_dev=30.0)
+
+# 3. Frekans Maskelerini (Filtreleri) Hazırlama
+rows, cols = orijinal_resim.shape
+crow, ccol = rows // 2, cols // 2
+x, y = np.arange(cols) - ccol, np.arange(rows) - crow
+X, Y = np.meshgrid(x, y)
+D = np.sqrt(X**2 + Y**2)
+
+D0 = 30  # Düşük kesim frekansı (yarıçap)
+D1 = 80  # Yüksek kesim frekansı (yarıçap)
+
+# Filtre Maskeleri:
+LPF = (D <= D0).astype(float)                     # Low-Pass
+HPF = (D > D0).astype(float)                      # High-Pass
+BPF = ((D >= D0) & (D <= D1)).astype(float)       # Band-Pass
+BRF = ((D < D0) | (D > D1)).astype(float)         # Band-Reject
+
+# 4. Filtreleri Uygulama
+lp_sonuc = apply_frequency_filter(gurultulu_resim, LPF)
+hp_sonuc = apply_frequency_filter(gurultulu_resim, HPF)
+bp_sonuc = apply_frequency_filter(gurultulu_resim, BPF)
+br_sonuc = apply_frequency_filter(gurultulu_resim, BRF)
+
+# 5. Görselleştirme
+fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+
+axes[0, 0].imshow(orijinal_resim, cmap='gray')
+axes[0, 0].set_title('1. Orijinal Görüntü')
+
+axes[0, 1].imshow(gurultulu_resim, cmap='gray')
+axes[0, 1].set_title('2. Gürültülü Görüntü')
+
+axes[0, 2].imshow(lp_sonuc, cmap='gray')
+axes[0, 2].set_title('3. Low-Pass (Alçak Geçiren)')
+
+axes[1, 0].imshow(hp_sonuc, cmap='gray')
+axes[1, 0].set_title('4. High-Pass (Yüksek Geçiren)')
+
+axes[1, 1].imshow(bp_sonuc, cmap='gray')
+axes[1, 1].set_title('5. Band-Pass (Bant Geçiren)')
+
+axes[1, 2].imshow(br_sonuc, cmap='gray')
+axes[1, 2].set_title('6. Band-Reject (Bant Söndüren)')
+
+for ax in axes.flat:
+    ax.axis('off')
+plt.tight_layout()
+plt.show()
