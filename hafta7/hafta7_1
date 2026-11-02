@@ -1,0 +1,40 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+def fill_sine_vector(vector, amplitude, frequency, phase):
+    """
+    Verilen vektörü sinüs değerleriyle doldurur.
+    Zaman ekseni 1 saniyelik bir periyoda göre normalize edilmiştir.
+    """
+    N = len(vector)
+
+    # 0 ile 1 saniye arasında N adet örneklem noktası oluştur (zaman vektörü)
+    t = np.linspace(0, 1, N, endpoint=False)
+
+    # Sinüs formülü: y(t) = A * sin(2 * pi * f * t + faz)
+    # Parametre olarak gelen vektörün içini doğrudan dolduruyoruz
+    vector[:] = amplitude * np.sin(2 * np.pi * frequency * t + phase)
+
+    return t # Görselleştirmede X ekseni olarak kullanmak için döndürüyoruz
+
+# 1. 2'nin kuvveti boyutunda (örneğin 2^10 = 1024) bir vektör oluştur
+N = 1024
+signal_vector = np.zeros(N)
+
+# 2. Sinüs dalgası parametrelerini belirle
+genlik = 5.0         # Genlik (Amplitude)
+frekans = 5.0        # Frekans (Hz)
+faz = np.pi / 2      # Faz (Radyan cinsinden, örn: 90 derece)
+
+# 3. Fonksiyonu çağırarak vektörü doldur
+zaman_ekseni = fill_sine_vector(signal_vector, genlik, frekans, faz)
+
+# 4. Elde edilen sinyali görselleştir
+plt.figure(figsize=(10, 4))
+plt.plot(zaman_ekseni, signal_vector, color='blue', linewidth=2)
+plt.title(f"Sinüzoidal Dalga (Genlik: {genlik}, Frekans: {frekans}Hz, Faz: π/2)")
+plt.xlabel("Zaman (saniye)")
+plt.ylabel("Genlik")
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
