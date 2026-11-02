@@ -1,0 +1,80 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+def threshold_frequency_filter(signal, threshold):
+    """
+    Sinyali frekans uzayına çevirir, genliği eşik değerinin
+    altında kalan bileşenleri sıfırlar ve sinyali geri döndürür.
+    """
+    N = len(signal)
+
+    # 1. Fourier Dönüşümü (FFT)
+    fft_result = np.fft.fft(signal)
+
+    # 2. Genlik (Harmonik) vektörünün hesaplanması
+    # FFT katsayılarının büyüklüğünü genliğe çeviriyoruz
+    magnitudes = (np.abs(fft_result) / N) * 2
+
+    # 3. Filtreleme (Maskeleme)
+    # Eşik değerinin altındaki genliklerin indekslerini bul ve FFT sonucunda 0'a eşitle
+    mask = magnitudes >= threshold
+    filtered_fft = fft_result * mask
+
+    # 4. Ters Fourier Dönüşümü (IFFT)
+    # Filtrelenmiş karmaşık sayılardan zaman uzayına dönüş (sadece reel kısmı alıyoruz)
+    filtered_signal = np.fft.ifft(filtered_fft).real
+
+    return filtered_signal, magnitudes
+
+# --- 5. Görevdeki Sinyallerin Yeniden Oluşturulması ---
+N = 1024
+t = np.linspace(0, 1, N, endpoint=False)
+gurultu_orani = 0.3
+
+# 50 Hz, Genlik 12 + Gürültü
+sinyal1_gurultulu = 12 * np.sin(2 * np.pi * 50 * t) + np.random.normal(0, 12 * gurultu_orani, N)
+# 30 Hz, Genlik 5 + Gürültü
+sinyal2_gurultulu = 5 * np.sin(2 * np.pi * 30 * t) + np.random.normal(0, 5 * gurultu_orani, N)
+
+# Toplam Gürültülü Sinyal
+toplam_sinyal = sinyal1_gurultulu + sinyal2_gurultulu
+
+# --- Filtreleme İşlemi ---
+# Eşik değerimizi belirliyoruz (Gürültü tabanı düşük olduğu için 2.0 ideal bir eşik değeridir)
+esik_degeri = 2.0
+temiz_sinyal, genlikler = threshold_frequency_filter(toplam_sinyal, esik_degeri)
+
+# --- Görselleştirme ---
+plt.figure(figsize=(12, 10))
+
+# 1. Orijinal Gürültülü Toplam Sinyal
+plt.subplot(3, 1, 1)
+plt.plot(t[:200], toplam_sinyal[:200], color='gray', label='Gürültülü Toplam Sinyal')
+plt.title("Zaman Uzayı: Orijinal Gürültülü Sinyal (İlk 200 Örneklem)")
+plt.xlabel("Zaman (saniye)")
+plt.ylabel("Genlik")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
+
+# 2. Frekans Spektrumu ve Eşik Değeri
+freqs = np.fft.fftfreq(N, 1/N)
+plt.subplot(3, 1, 2)
+plt.plot(freqs[:100], genlikler[:100], color='blue', label='Sinyal Genlikleri')
+plt.axhline(y=esik_degeri, color='red', linestyle='--', label=f'Eşik Değeri ({esik_degeri})')
+plt.title("Frekans Uzayı: Genlikler ve Eşik Filtresi")
+plt.xlabel("Frekans (Hz)")
+plt.ylabel("Genlik")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
+
+# 3. Temizlenmiş (IFFT) Sinyal
+plt.subplot(3, 1, 3)
+plt.plot(t[:200], temiz_sinyal[:200], color='green', linewidth=2, label='Filtrelenmiş Sinyal')
+plt.title("Zaman Uzayı: IFFT ile Geri Dönüştürülmüş Temiz Sinyal")
+plt.xlabel("Zaman (saniye)")
+plt.ylabel("Genlik")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
+
+plt.tight_layout()
+plt.show()
