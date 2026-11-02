@@ -1,0 +1,46 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+def get_harmonic_vector(vector, sampling_rate):
+    """
+    Vektör üzerinde DFT (FFT algoritması ile) uygular ve
+    pozitif frekanslar için harmonik (genlik) vektörünü döndürür.
+    """
+    N = len(vector)
+
+    # FFT hesaplaması (Karmaşık sayılar döner)
+    fft_result = np.fft.fft(vector)
+
+    # Frekans eksenini oluştur
+    freqs = np.fft.fftfreq(N, 1/sampling_rate)
+
+    # Genlikleri hesapla ve normalize et (N'e böl, tek taraflı için 2 ile çarp)
+    magnitudes = np.abs(fft_result) / N
+    magnitudes = magnitudes * 2
+
+    # Sadece pozitif frekansları al (Nyquist teoremine göre yarısı)
+    half_n = N // 2
+
+    return freqs[:half_n], magnitudes[:half_n]
+
+# Örneklem sayısı ve periyoda göre örnekleme frekansı (fs = N / 1 saniye)
+N = 1024
+fs = N
+
+# DFT Fonksiyonunu orijinal ve gürültülü vektörlere uygula
+freqs_orijinal, harmonics_orijinal = get_harmonic_vector(orijinal_vektor, fs)
+freqs_gurultulu, harmonics_gurultulu = get_harmonic_vector(gurultulu_vektor, fs)
+
+# Frekans Spektrumlarını Görselleştir (Sadece ilk 50 Hz'i görelim, detaylar orada)
+plt.figure(figsize=(12, 6))
+
+plt.plot(freqs_orijinal[:50], harmonics_orijinal[:50], marker='o', label='Orijinal Sinyal Harmonikleri')
+plt.plot(freqs_gurultulu[:50], harmonics_gurultulu[:50], alpha=0.7, label='Gürültülü Sinyal Harmonikleri')
+
+plt.title("Gürültüsüz ve Gürültülü Sinyallerin Frekans Spektrumu (DFT)")
+plt.xlabel("Frekans (Hz)")
+plt.ylabel("Genlik")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
+plt.tight_layout()
+plt.show()
