@@ -1,0 +1,48 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+def add_noise_and_plot(vector, noise_ratio):
+    """
+    Vektördeki sinyalin genliğine ve verilen [0, 1] aralığındaki gürültü oranına
+    göre rastgele (Gaussian) gürültü ekler ve grafiğini çizer.
+    """
+    # Gürültü oranının [0, 1] aralığında olduğundan emin ol
+    noise_ratio = np.clip(noise_ratio, 0.0, 1.0)
+
+    # Sinyalin genliğini hesapla (Maksimum mutlak değer)
+    amplitude = np.max(np.abs(vector))
+
+    # Gürültünün standart sapmasını genlik ve orana göre belirle
+    noise_std = amplitude * noise_ratio
+
+    # Vektör boyutu kadar rastgele gürültü üret (Ortalama: 0, Standart Sapma: noise_std)
+    noise = np.random.normal(0, noise_std, len(vector))
+
+    # Gürültüyü orijinal vektöre ekle
+    noisy_vector = vector + noise
+
+    # Zaman eksenini varsayılan indeksler olarak ayarla
+    t = np.linspace(0, 1, len(vector), endpoint=False)
+
+    # Sonuçları görselleştir
+    plt.figure(figsize=(10, 4))
+    plt.plot(t, noisy_vector, color='red', alpha=0.7, label=f'Gürültülü Sinyal (Oran: {noise_ratio})')
+    plt.plot(t, vector, color='blue', alpha=0.8, linewidth=2, label='Orijinal Sinyal')
+
+    plt.title("Orijinal Sinyal ve Gürültü Eklenmiş Hali")
+    plt.xlabel("Zaman (saniye)")
+    plt.ylabel("Genlik")
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.show()
+
+    return noisy_vector
+
+# Önceki adımda oluşturduğumuz parametrelerle örnek bir sinyal oluşturalım
+N = 1024
+t = np.linspace(0, 1, N, endpoint=False)
+orijinal_vektor = 5.0 * np.sin(2 * np.pi * 5.0 * t)
+
+# %20 (0.2) oranında gürültü ekleyip çizdirelim
+gurultulu_vektor = add_noise_and_plot(orijinal_vektor, noise_ratio=0.2)
