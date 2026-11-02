@@ -1,0 +1,46 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import medfilt
+
+# (Bir önceki adımdaki 'orijinal_vektor', 'gurultulu_vektor' ve 't' değişkenlerinin var olduğu varsayılmıştır)
+
+# 1. Gauss Filtresi (Standart sapma - sigma değerini belirliyoruz)
+sigma_degeri = 5
+gauss_filtrelenmis = gaussian_filter1d(gurultulu_vektor, sigma=sigma_degeri)
+
+# 2. Medyan Filtresi (Kernel/pencere boyutu tek sayı olmalıdır)
+kernel_boyutu = 15
+medyan_filtrelenmis = medfilt(gurultulu_vektor, kernel_size=kernel_boyutu)
+
+# Sonuçları Görselleştirme
+plt.figure(figsize=(14, 8))
+
+# Orijinal ve Gürültülü Sinyal
+plt.subplot(3, 1, 1)
+plt.plot(t, gurultulu_vektor, color='lightgray', label='Gürültülü Sinyal')
+plt.plot(t, orijinal_vektor, color='black', linestyle='--', linewidth=2, label='Orijinal Sinyal')
+plt.title("Orijinal ve Gürültülü Sinyal")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.5)
+
+# Gauss Filtresi Sonucu
+plt.subplot(3, 1, 2)
+plt.plot(t, gurultulu_vektor, color='lightgray', alpha=0.5)
+plt.plot(t, gauss_filtrelenmis, color='blue', linewidth=2, label=f'Gauss Filtresi (sigma={sigma_degeri})')
+plt.plot(t, orijinal_vektor, color='black', linestyle='--', alpha=0.7, label='Orijinal Sinyal')
+plt.title("Gauss Filtresi ile Temizleme")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.5)
+
+# Medyan Filtresi Sonucu
+plt.subplot(3, 1, 3)
+plt.plot(t, gurultulu_vektor, color='lightgray', alpha=0.5)
+plt.plot(t, medyan_filtrelenmis, color='red', linewidth=2, label=f'Medyan Filtresi (kernel={kernel_boyutu})')
+plt.plot(t, orijinal_vektor, color='black', linestyle='--', alpha=0.7, label='Orijinal Sinyal')
+plt.title("Medyan Filtresi ile Temizleme")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.5)
+
+plt.tight_layout()
+plt.show()
