@@ -1,0 +1,62 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# --- 1. ZNCC Metriği Fonksiyonu ---
+def calculate_zncc(img1, img2):
+    """İki görüntü arasındaki ZNCC (Zero Mean Normalized Cross Correlation) değerini hesaplar."""
+    img1 = img1.astype(np.float64)
+    img2 = img2.astype(np.float64)
+    
+    # Sıfır Ortalama (Zero Mean) adımı
+    img1_zm = img1 - np.mean(img1)
+    img2_zm = img2 - np.mean(img2)
+    
+    # Pay: Kovaryans
+    numerator = np.sum(img1_zm * img2_zm)
+    
+    # Payda: Standart Sapmaların Çarpımı
+    denominator = np.sqrt(np.sum(img1_zm**2) * np.sum(img2_zm**2))
+    
+    if denominator == 0:
+        return 0.0
+    return numerator / denominator
+
+# --- 2. Ters DFT (IDFT) Fonksiyonu ---
+def compute_inverse_dft(f_shift):
+    """Merkezileştirilmiş frekans matrisini tersine çevirip görüntüyü geri oluşturur."""
+    # Merkeze kaydırılmış düşük frekansları eski yerine (köşelere) al
+    f_ishift = np.fft.ifftshift(f_shift)
+    # Ters 2D FFT uygula
+    img_back = np.fft.ifft2(f_ishift)
+    # Karmaşık sayıların sadece reel (gerçek) kısmını al
+    return np.real(img_back)
+
+# (Önceki adımlardaki 'resim', 'compute_2d_dft', 'gauss_resim', 'sp_resim' kullanılıyor)
+
+# Gauss gürültülü resim için DFT -> IDFT döngüsü
+f_shift_gauss, _ = compute_2d_dft(gauss_resim)
+reconstructed_gauss = compute_inverse_dft(f_shift_gauss)
+
+# Salt & Pepper gürültülü resim için DFT -> IDFT döngüsü
+f_shift_sp, _ = compute_2d_dft(sp_resim)
+reconstructed_sp = compute_inverse_dft(f_shift_sp)
+
+# ZNCC Skorlarını Hesapla (Değer 1.0'a ne kadar yakınsa o kadar benzerdir)
+zncc_gauss = calculate_zncc(resim, reconstructed_gauss)
+zncc_sp = calculate_zncc(resim, reconstructed_sp)
+
+print(f"Orijinal ve IDFT(Gauss Gürültüsü) arası ZNCC Skoru: {zncc_gauss:.4f}")
+print(f"Orijinal ve IDFT(Salt&Pepper) arası ZNCC Skoru: {zncc_sp:.4f}")
+
+# Görselleştirme
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+axes[0].imshow(resim, cmap='gray')
+axes[0].set_title('Orijinal Resim')
+axes[1].imshow(reconstructed_gauss, cmap='gray')
+axes[1].set_title(f'Yeniden Üretilen (Gauss)\nZNCC: {zncc_gauss:.4f}')
+axes[2].imshow(reconstructed_sp, cmap='gray')
+axes[2].set_title(f'Yeniden Üretilen (S&P)\nZNCC: {zncc_sp:.4f}')
+
+for ax in axes:
+    ax.axis('off')
+plt.show()
