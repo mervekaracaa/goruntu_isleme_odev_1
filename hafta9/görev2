@@ -1,0 +1,41 @@
+%%writefile gorev2.cpp
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <fstream>
+
+using namespace cv;
+using namespace std;
+
+// Dosya boyutunu byte cinsinden donduren yardimci fonksiyon
+long getFileSize(string filename) {
+    ifstream in(filename, ifstream::ate | ifstream::binary);
+    return in.tellg(); 
+}
+
+int main() {
+    // 1000x1000 rastgele renklerden olusan bir resim olustur (BGR formati)
+    Mat renkliImg(1000, 1000, CV_8UC3);
+    randu(renkliImg, Scalar(0, 0, 0), Scalar(255, 255, 255));
+    
+    // Ekranda gosterme (Colab'de calismadigi icin yorum satirinda)
+    // imshow("Renkli Resim", renkliImg);
+    // waitKey(0);
+
+    imwrite("1000x1000_renkli.bmp", renkliImg);
+
+    // Griye cevirme islemi
+    Mat griImg;
+    cvtColor(renkliImg, griImg, COLOR_BGR2GRAY);
+    imwrite("1000x1000_gri.bmp", griImg);
+
+    // Boyut kiyaslamasi
+    long renkliBoyut = getFileSize("1000x1000_renkli.bmp");
+    long griBoyut = getFileSize("1000x1000_gri.bmp");
+
+    cout << "--- Dosya Boyutu Kiyaslamasi ---" << endl;
+    cout << "Renkli (3 Kanal) Boyutu: " << renkliBoyut << " bytes" << endl;
+    cout << "Gri (1 Kanal) Boyutu:    " << griBoyut << " bytes" << endl;
+    cout << "Fark: Gri resim yaklasik " << (float)renkliBoyut / griBoyut << " kat daha az yer kapliyor." << endl;
+
+    return 0;
+}
