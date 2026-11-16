@@ -1,0 +1,51 @@
+%%writefile gorev5.cpp
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+using namespace cv;
+using namespace std;
+
+int main() {
+    Mat img = imread("insan_yuzu.bmp", IMREAD_COLOR);
+    if(img.empty()) { 
+        cout << "insan_yuzu.bmp bulunamadi! Lutfen ten rengi olan bir resim yukleyin." << endl; 
+        return -1; 
+    }
+
+    Mat maskRGB, maskHSV, maskYCrCb;
+    Mat outRGB = img.clone();
+    Mat outHSV = img.clone();
+    Mat outYCrCb = img.clone();
+
+    // 1. RGB (OpenCV'de BGR) İÇİN TEN SINIRLARI
+    // Alt sinir (B, G, R): 20, 40, 95 | Ust sinir: 255, 255, 255
+    inRange(img, Scalar(20, 40, 95), Scalar(255, 255, 255), maskRGB);
+
+    // 2. HSV İÇİN TEN SINIRLARI
+    Mat imgHSV;
+    cvtColor(img, imgHSV, COLOR_BGR2HSV);
+    inRange(imgHSV, Scalar(0, 48, 80), Scalar(20, 255, 255), maskHSV);
+
+    // 3. YCbCr İÇİN TEN SINIRLARI
+    Mat imgYCrCb;
+    cvtColor(img, imgYCrCb, COLOR_BGR2YCrCb);
+    inRange(imgYCrCb, Scalar(0, 133, 77), Scalar(255, 173, 127), maskYCrCb);
+
+    // MASKELERİ TERSİNE ÇEVİR (Ten OLMAYAN pikselleri 255 yap)
+    Mat notSkinRGB, notSkinHSV, notSkinYCrCb;
+    bitwise_not(maskRGB, notSkinRGB);
+    bitwise_not(maskHSV, notSkinHSV);
+    bitwise_not(maskYCrCb, notSkinYCrCb);
+
+    // TEN OLMAYAN BÖLGELERİ KIRMIZI YAP (B=0, G=0, R=255)
+    outRGB.setTo(Scalar(0, 0, 255), notSkinRGB);
+    outHSV.setTo(Scalar(0, 0, 255), notSkinHSV);
+    outYCrCb.setTo(Scalar(0, 0, 255), notSkinYCrCb);
+
+    imwrite("Ten_Ayrimi_RGB.bmp", outRGB);
+    imwrite("Ten_Ayrimi_HSV.bmp", outHSV);
+    imwrite("Ten_Ayrimi_YCrCb.bmp", outYCrCb);
+
+    cout << "Ten ayrimi islemleri tamamlandi. Ten olmayan yerler kirmizi yapildi." << endl;
+    return 0;
+}
