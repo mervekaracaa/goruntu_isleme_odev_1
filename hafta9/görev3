@@ -1,0 +1,35 @@
+%%writefile gorev3.cpp
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <chrono>
+
+using namespace cv;
+using namespace std;
+using namespace std::chrono;
+
+int main() {
+    // 8K cozunurluk (7680x4320) ve 3-kanalli (CV_8UC3) bir resim olustur
+    Mat img8K(4320, 7680, CV_8UC3, Scalar(100, 150, 200)); // Maviye calan bir renk
+    cout << "8K resim basariyla olusturuldu. Boyut: " << img8K.cols << "x" << img8K.rows << endl;
+
+    // Sure olcumunu baslat
+    auto start = high_resolution_clock::now();
+    
+    // Goruntudeki her bir piksel degerini 2'ye bolme islemi
+    img8K /= 2; 
+    
+    // Sure olcumunu bitir
+    auto stop = high_resolution_clock::now();
+    
+    auto duration = duration_cast<microseconds>(stop - start);
+    
+    cout << "Resmi duzenleme (2'ye bolme) islemi suresi: " 
+         << duration.count() << " mikrosaniye (" 
+         << duration.count() / 1000.0 << " ms)" << endl;
+         
+    // Duzenlenmis resmi kaydet
+    imwrite("8K_yari_deger.bmp", img8K);
+    cout << "Duzenlenen 8K resim disk uzerine '8K_yari_deger.bmp' olarak kaydedildi." << endl;
+
+    return 0;
+}
