@@ -1,0 +1,88 @@
+%%writefile gorev2_trafik_isaretleri.cpp
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <filesystem>
+
+using namespace cv;
+using namespace std;
+namespace fs = std::filesystem;
+
+void kirmiziCemberTespitEt(const string& girisYolu, const string& cikisYolu) {
+    Mat img = imread(girisYolu, IMREAD_COLOR);
+    if (img.empty()) {
+        cout << "Goruntu okunamadi: " << girisYolu << endl;
+        return;
+    }
+
+    Mat output = img.clone();
+
+    // --- 1. RENK UZAYI: HSV ile Kirmizi Maskeleme ---
+    Mat hsv, maskHSV1, maskHSV2, maskHSV;
+    cvtColor(img, hsv, COLOR_BGR2HSV);
+    inRange(hsv, Scalar(0, 70, 50), Scalar(10, 255, 255), maskHSV1);
+    inRange(hsv, Scalar(170, 70, 50), Scalar(180, 255, 255), maskHSV2);
+    bitwise_or(maskHSV1, maskHSV2, maskHSV);
+
+    // --- 2. RENK UZAYI: CIE Lab ile Kirmizi Maskeleme ---
+    // Lab uzayinda 'a' kanali (indeks 1) 128'den buyukse kirmiziya kayar
+    Mat lab, maskLab;
+    cvtColor(img, lab, COLOR_BGR2Lab);
+    inRange(lab, Scalar(20, 150, 120), Scalar(255, 255, 255), maskLab);
+
+    // Iki renk uzayinin ortak kirmizi bolgelerini al (daha az yanlis pozitif)
+    Mat kirmiziMaske;
+    bitwise_and(maskHSV, maskLab, kirmiziMaske);
+
+    // Morfolojik temizleme ve yumusatma (HoughCircles icin kritik)
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
+    morphologyEx(kirmiziMaske, kirmiziMaske, MORPH_CLOSE, kernel);
+    GaussianBlur(kirmiziMaske, kirmiziMaske, Size(9, 9), 2, 2);
+
+    // --- 3. HOUGH CEMBER DONUSUMU ---
+    vector<Vec3f> circles;
+    HoughCircles(
+        kirmiziMaske,
+        circles,
+        HOUGH_GRADIENT,
+        1,                      // dp (cozunurluk orani)
+        kirmiziMaske.rows / 8,  // cember merkezleri arasi min mesafe
+        100,                    // Canny ust esigi
+        20,                     // Akumulator esigi (kuculdukce daha cok cember bulur)
+        15,                     // Minimum yaricap
+        kirmiziMaske.rows / 2   // Maksimum yaricap
+    );
+
+    // Bulunan cemberleri orijinal goruntu uzerine ciz
+    for (size_t i = 0; i < circles.size(); i++) {
+        Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
+        int radius = cvRound(circles[i][2]);
+        // Merkez noktasi (mavi) ve cember cevresi (yesil)
+        circle(output, center, 3, Scalar(255, 0, 0), -1, LINE_AA);
+        circle(output, center, radius, Scalar(0, 255, 0), 3, LINE_AA);
+    }
+
+    imwrite(cikisYolu, output);
+    cout << girisYolu << " -> Bulunan kirmizi cember sayisi: " << circles.size() << endl;
+}
+
+int main() {
+    string girisKlasoru = "/content/traffic_signs";   // Kaggle resimlerinin oldugu klasor
+    string cikisKlasoru = "/content/sonuc_isaretler"; // Ciktilarin kaydedilecegi klasor
+
+    fs::create_directories(cikisKlasoru);
+
+    int islenen = 0;
+    for (const auto& entry : fs::directory_iterator(girisKlasoru)) {
+        string ext = entry.path().extension().string();
+        if (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp") {
+            string girisYolu = entry.path().string();
+            string cikisYolu = cikisKlasoru + "/tespit_" + entry.path().filename().string();
+            kirmiziCemberTespitEt(girisYolu, cikisYolu);
+            islenen++;
+            if (islenen >= 20) break; // Test icin ilk 20 gorseli isler, istersen bu satiri kaldir
+        }
+    }
+
+    cout << "Islem tamamlandi. Toplam " << islenen << " goruntu islendi." << endl;
+    return 0;
+}
