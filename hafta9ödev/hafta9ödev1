@@ -1,0 +1,86 @@
+%%writefile gorev1_kamera_roi_ten.cpp
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+using namespace cv;
+using namespace std;
+
+int main() {
+    // Web kamerasini ac (Colab'de test icin "test_video.mp4" yazabilirsin)
+    VideoCapture cap(0);
+    if (!cap.isOpened()) {
+        cout << "Kamera veya video acilamadi!" << endl;
+        return -1;
+    }
+
+    Mat prevFrame, currFrame, prevGray, currGray, diff, thresh;
+    cap >> prevFrame;
+    if (prevFrame.empty()) return -1;
+
+    cvtColor(prevFrame, prevGray, COLOR_BGR2GRAY);
+    GaussianBlur(prevGray, prevGray, Size(21, 21), 0);
+
+    const int HAREKET_ESIGI = 1500; // Yeterli hareket icin minimum piksel sayisi
+
+    while (true) {
+        cap >> currFrame;
+        if (currFrame.empty()) break;
+
+        Mat output = currFrame.clone();
+
+        // 1. Ardisik kareler arasi hareket tespiti
+        cvtColor(currFrame, currGray, COLOR_BGR2GRAY);
+        GaussianBlur(currGray, currGray, Size(21, 21), 0);
+
+        absdiff(prevGray, currGray, diff);
+        threshold(diff, thresh, 25, 255, THRESH_BINARY);
+        dilate(thresh, thresh, Mat(), Point(-1, -1), 2);
+
+        // Hareketli piksel sayisini kontrol et
+        int hareketliPiksel = countNonZero(thresh);
+
+        if (hareketliPiksel > HAREKET_ESIGI) {
+            // Hareketli bolgeyi kapsayan ROI dikdortgenini bul
+            Rect roiRect = boundingRect(thresh);
+
+            // ROI sinirlarinin goruntu disina tasmamasini garantiye al
+            roiRect = roiRect & Rect(0, 0, currFrame.cols, currFrame.rows);
+
+            if (roiRect.width > 0 && roiRect.height > 0) {
+                // 2. Sadece ROI icinde calis (Geri kalan kisim arka plan olarak kalir)
+                Mat roi = output(roiRect);
+                Mat roiYCrCb, skinMask;
+
+                // Ten rengi tespiti icin YCrCb uzayi
+                cvtColor(roi, roiYCrCb, COLOR_BGR2YCrCb);
+                inRange(roiYCrCb, Scalar(0, 133, 77), Scalar(255, 173, 127), skinMask);
+
+                // Gurultuyu azalt
+                erode(skinMask, skinMask, Mat(), Point(-1, -1), 1);
+                dilate(skinMask, skinMask, Mat(), Point(-1, -1), 2);
+
+                // Sadece ROI icindeki ten bolgelerini renklendir (Ornek: Yesil)
+                roi.setTo(Scalar(0, 255, 0), skinMask);
+
+                // ROI alanini mavi cerceve ile goster
+                rectangle(output, roiRect, Scalar(255, 0, 0), 2);
+                putText(output, "Hareketli ROI", Point(roiRect.x, max(20, roiRect.y - 10)),
+                        FONT_HERSHEY_SIMPLEX, 0.6, Scalar(255, 0, 0), 2);
+            }
+        }
+
+        // Yerel bilgisayarda goruntuleme
+        imshow("Hareketli ROI - Ten Tespiti", output);
+
+        // Bir sonraki kare icin guncelle
+        prevGray = currGray.clone();
+
+        // 'q' veya ESC ile cikis
+        char key = (char)waitKey(30);
+        if (key == 'q' || key == 27) break;
+    }
+
+    cap.release();
+    destroyAllWindows();
+    return 0;
+}
