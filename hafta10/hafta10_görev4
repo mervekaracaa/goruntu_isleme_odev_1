@@ -1,0 +1,236 @@
+%%writefile /content/sgbc_custom.cpp
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <limits>
+#include <algorithm>
+#include <opencv2/opencv.hpp>
+
+// Temel piksel/blok SAD maliyeti: cost[y][x][d]
+std::vector<float> computeBaseSADVolume(
+    const cv::Mat& left,
+    const cv::Mat& right,
+    int blockSize,
+    int maxDisparity
+) {
+    const int rows = left.rows;
+    const int cols = left.cols;
+    const int half = blockSize / 2;
+    const int numD = maxDisparity;
+
+    std::vector<float> costVol(static_cast<size_t>(rows) * cols * numD, 1e9f);
+
+    auto idx = [=](int y, int x, int d) -> size_t {
+        return (static_cast<size_t>(y) * cols + x) * numD + d;
+    };
+
+    for (int y = half; y < rows - half; ++y) {
+        for (int x = half + maxDisparity; x < cols - half; ++x) {
+            for (int d = 0; d < numD; ++d) {
+                float sad = 0.0f;
+                for (int wy = -half; wy <= half; ++wy) {
+                    const uchar* rL = left.ptr<uchar>(y + wy);
+                    const uchar* rR = right.ptr<uchar>(y + wy);
+                    for (int wx = -half; wx <= half; ++wx) {
+                        sad += static_cast<float>(
+                            std::abs(static_cast<int>(rL[x + wx]) - static_cast<int>(rR[(x - d) + wx]))
+                        );
+                    }
+                }
+                costVol[idx(y, x, d)] = sad;
+            }
+        }
+    }
+
+    return costVol;
+}
+
+// Tek bir (dy, dx) yonu boyunca kumuletif yol maliyetini hesaplar
+void aggregateSingleDirection(
+    const cv::Mat& left,
+    const std::vector<float>& baseCost,
+    std::vector<float>& aggTotal,
+    int maxDisparity,
+    int dy,
+    int dx,
+    float P1,
+    float P2
+) {
+    const int rows = left.rows;
+    const int cols = left.cols;
+    const int numD = maxDisparity;
+
+    auto idx = [=](int y, int x, int d) -> size_t {
+        return (static_cast<size_t>(y) * cols + x) * numD + d;
+    };
+
+    // Onceki adimin maliyetleri icin gecici satir/vektor
+    std::vector<float> prevPath(numD, 0.0f);
+    std::vector<float> currPath(numD, 0.0f);
+
+    // Tarama baslangic ve bitis sirasi yone gore belirlenir
+    std::vector<int> ys(rows), xs(cols);
+    for (int y = 0; y < rows; ++y) ys[y] = (dy < 0) ? (rows - 1 - y) : y;
+    for (int x = 0; x < cols; ++x) xs[x] = (dx < 0) ? (cols - 1 - x) : x;
+
+    for (int y : ys) {
+        for (int x : xs) {
+            int py = y - dy;
+            int px = x - dx;
+
+            bool hasPrev = (py >= 0 && py < rows && px >= 0 && px < cols);
+            float minPrev = 0.0f;
+            float edgePenaltyScale = 1.0f;
+
+            if (hasPrev) {
+                minPrev = *std::min_element(prevPath.begin(), prevPath.end());
+                // Goruntu kenarinda P2'yi esnetmek icin yogunluk farki kontrolu
+                int diffI = std::abs(
+                    static_cast<int>(left.at<uchar>(y, x)) - static_cast<int>(left.at<uchar>(py, px))
+                );
+                if (diffI > 20) {
+                    edgePenaltyScale = 0.5f;
+                }
+            }
+
+            for (int d = 0; d < numD; ++d) {
+                float localCost = baseCost[idx(y, x, d)];
+                if (!hasPrev) {
+                    currPath[d] = localCost;
+                    continue;
+                }
+
+                // |k - d| == 0: prevPath[d]
+                float c0 = prevPath[d];
+                // |k - d| == 1: prevPath[d-1] veya prevPath[d+1] + P1
+                float c1 = std::numeric_limits<float>::infinity();
+                if (d > 0) c1 = std::min(c1, prevPath[d - 1] + P1);
+                if (d + 1 < numD) c1 = std::min(c1, prevPath[d + 1] + P1);
+
+                // |k - d| > 1: min_k(prevPath[k]) + P2_eff
+                float p2Eff = std::max(P1 + 1.0f, P2 * edgePenaltyScale);
+                float c2 = minPrev + p2Eff;
+
+                float bestPrev = std::min({c0, c1, c2});
+                currPath[d] = localCost + bestPrev - minPrev;
+            }
+
+            for (int d = 0; d < numD; ++d) {
+                aggTotal[idx(y, x, d)] += currPath[d];
+                prevPath[d] = currPath[d];
+            }
+        }
+    }
+}
+
+cv::Mat computeSGBCDisparity(
+    const cv::Mat& left,
+    const cv::Mat& right,
+    int blockSize = 5,
+    int maxDisparity = 64,
+    float smoothness = 1.0f
+) {
+    CV_Assert(!left.empty() && !right.empty());
+    CV_Assert(left.type() == CV_8UC1 && right.type() == CV_8UC1);
+    CV_Assert(left.size() == right.size());
+
+    const int rows = left.rows;
+    const int cols = left.cols;
+    const int numD = maxDisparity;
+
+    // Smoothness parametresi P1 ve P2 yumusak gecis cezalarini olcekler
+    float P1 = 12.0f * smoothness;
+    float P2 = 64.0f * smoothness;
+
+    std::vector<float> baseCost = computeBaseSADVolume(left, right, blockSize, maxDisparity);
+    std::vector<float> aggTotal(static_cast<size_t>(rows) * cols * numD, 0.0f);
+
+    // 4 yonlu tarama: sol->sag, sag->sol, yukari->asagi, asagi->yukari
+    const std::vector<std::pair<int, int>> dirs = {
+        {0, 1}, {0, -1}, {1, 0}, {-1, 0}
+    };
+
+    for (const auto& dir : dirs) {
+        aggregateSingleDirection(left, baseCost, aggTotal, maxDisparity, dir.first, dir.second, P1, P2);
+    }
+
+    cv::Mat disp = cv::Mat::zeros(rows, cols, CV_8U);
+    auto idx = [=](int y, int x, int d) -> size_t {
+        return (static_cast<size_t>(y) * cols + x) * numD + d;
+    };
+
+    for (int y = 0; y < rows; ++y) {
+        for (int x = 0; x < cols; ++x) {
+            int bestD = 0;
+            float minAgg = aggTotal[idx(y, x, 0)];
+            for (int d = 1; d < numD; ++d) {
+                float val = aggTotal[idx(y, x, d)];
+                if (val < minAgg) {
+                    minAgg = val;
+                    bestD = d;
+                }
+            }
+            disp.at<uchar>(y, x) = static_cast<uchar>(bestD);
+        }
+    }
+
+    return disp;
+}
+
+int main() {
+    cv::Mat left = cv::imread("/content/scene1.row3.col1.ppm", cv::IMREAD_GRAYSCALE);
+    cv::Mat right = cv::imread("/content/scene1.row3.col3.ppm", cv::IMREAD_GRAYSCALE);
+
+    if (left.empty() || right.empty()) {
+        std::cerr << "HATA: Goruntuler okunamadi!" << std::endl;
+        return 1;
+    }
+
+    // Farkli smoothness degerleriyle fark haritasi uret
+    std::vector<float> smoothVals = {0.3f, 1.0f, 2.5f};
+    for (float s : smoothVals) {
+        cv::Mat dispRaw = computeSGBCDisparity(left, right, 5, 64, s);
+        cv::Mat dispNorm, dispColor;
+        cv::normalize(dispRaw, dispNorm, 0, 255, cv::NORM_MINMAX, CV_8U);
+        cv::applyColorMap(dispNorm, dispColor, cv::COLORMAP_JET);
+
+        std::string fname = "/content/sgbc_smooth_" + std::to_string(s) + ".png";
+        cv::imwrite(fname, dispColor);
+        std::cout << "Kaydedildi: " << fname << " (smoothness=" << s << ")" << std::endl;
+    }
+
+    return 0;
+}
+
+
+
+%%bash
+set -e
+if [ ! -f /usr/include/opencv4/opencv2/opencv.hpp ] && [ ! -f /usr/local/include/opencv4/opencv2/opencv.hpp ]; then
+    apt-get update -qq && apt-get install -y -qq libopencv-dev
+fi
+g++ -O3 -std=c++17 /content/sgbc_custom.cpp -o /content/sgbc_custom $(pkg-config --cflags --libs opencv4 2>/dev/null || echo "-I/usr/include/opencv4 -lopencv_core -lopencv_imgproc -lopencv_imgcodecs")
+/content/sgbc_custom
+
+
+
+
+  import glob
+import cv2
+from matplotlib import pyplot as plt
+
+files = sorted(glob.glob("/content/sgbc_smooth_*.png"))
+assert len(files) > 0, "SGBC cikti dosyalari bulunamadi."
+
+fig, axes = plt.subplots(1, len(files), figsize=(5 * len(files), 4.5))
+if len(files) == 1:
+    axes = [axes]
+
+for ax, fpath in zip(axes, files):
+    img = cv2.imread(fpath)
+    ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    ax.set_title(fpath.split("/")[-1].replace(".png", ""))
+    ax.axis("off")
+
+plt.tight_layout()
+plt.show()
