@@ -1,0 +1,100 @@
+%%bash
+set -e
+cat << 'EOF' > /content/stereo_custom.cpp
+#include <iostream>
+#include <limits>
+#include <cmath>
+#include <opencv2/opencv.hpp>
+
+cv::Mat computeCustomDisparity(
+    const cv::Mat& left,
+    const cv::Mat& right,
+    int blockSize = 7,
+    int maxDisparity = 64
+) {
+    CV_Assert(!left.empty() && !right.empty());
+    CV_Assert(left.type() == CV_8UC1 && right.type() == CV_8UC1);
+    CV_Assert(left.size() == right.size());
+    CV_Assert(blockSize % 2 == 1 && blockSize >= 3);
+
+    int rows = left.rows;
+    int cols = left.cols;
+    int half = blockSize / 2;
+
+    cv::Mat disparity = cv::Mat::zeros(rows, cols, CV_8U);
+
+    for (int y = half; y < rows - half; ++y) {
+        for (int x = half + maxDisparity; x < cols - half; ++x) {
+            int bestDisp = 0;
+            long long minCost = std::numeric_limits<long long>::max();
+
+            for (int d = 0; d < maxDisparity; ++d) {
+                long long sad = 0;
+
+                for (int wy = -half; wy <= half; ++wy) {
+                    const uchar* rowL = left.ptr<uchar>(y + wy);
+                    const uchar* rowR = right.ptr<uchar>(y + wy);
+
+                    for (int wx = -half; wx <= half; ++wx) {
+                        int xl = x + wx;
+                        int xr = (x - d) + wx;
+                        sad += std::abs(static_cast<int>(rowL[xl]) - static_cast<int>(rowR[xr]));
+                    }
+                }
+
+                if (sad < minCost) {
+                    minCost = sad;
+                    bestDisp = d;
+                }
+            }
+
+            disparity.at<uchar>(y, x) = static_cast<uchar>(bestDisp);
+        }
+    }
+
+    return disparity;
+}
+
+int main() {
+    cv::Mat left = cv::imread("/content/scene1.row3.col1.ppm", cv::IMREAD_GRAYSCALE);
+    cv::Mat right = cv::imread("/content/scene1.row3.col3.ppm", cv::IMREAD_GRAYSCALE);
+
+    if (left.empty() || right.empty()) {
+        std::cerr << "HATA: Goruntuler okunamadi!" << std::endl;
+        return 1;
+    }
+
+    cv::Mat dispRaw = computeCustomDisparity(left, right, 7, 64);
+    cv::imwrite("/content/custom_disp_raw.png", dispRaw);
+    std::cout << "TAMAM: /content/custom_disp_raw.png olusturuldu." << std::endl;
+    return 0;
+}
+EOF
+
+g++ -O3 -std=c++17 /content/stereo_custom.cpp -o /content/stereo_custom $(pkg-config --cflags --libs opencv4 2>/dev/null || echo "-I/usr/include/opencv4 -lopencv_core -lopencv_imgproc -lopencv_imgcodecs")
+/content/stereo_custom
+
+
+  import cv2
+import numpy as np
+from matplotlib import pyplot as plt
+
+disp_raw = cv2.imread("/content/custom_disp_raw.png", cv2.IMREAD_GRAYSCALE)
+assert disp_raw is not None, "custom_disp_raw.png bulunamadi; onceki bash hucresini calistirin."
+
+print("Min kayma:", disp_raw.min(), "Max kayma:", disp_raw.max(), "Ortalama:", round(float(disp_raw.mean()), 2))
+
+# Ust %2'lik gurultu ucunu kirparak kirmizi skalayi yakin nesnelere odaklayalim
+upper = float(np.percentile(disp_raw, 98))
+if upper <= 0:
+    upper = 1.0
+
+disp_clipped = np.clip(disp_raw.astype(np.float32), 0.0, upper)
+disp_norm = ((disp_clipped / upper) * 255.0).astype(np.uint8)
+disp_color = cv2.applyColorMap(disp_norm, cv2.COLORMAP_JET)
+
+plt.figure(figsize=(9, 5))
+plt.imshow(cv2.cvtColor(disp_color, cv2.COLOR_BGR2RGB))
+plt.title("Kirpilmis Olcekli Blok Eslesme Haritasi")
+plt.axis("off")
+plt.show()
