@@ -1,0 +1,41 @@
+import glob
+import cv2
+import numpy as np
+from matplotlib import pyplot as plt
+
+print("/content icindeki dosyalar:", glob.glob("/content/*"))
+
+left = cv2.imread("/content/scene1.row3.col1.ppm", cv2.IMREAD_GRAYSCALE)
+right = cv2.imread("/content/scene1.row3.col3.ppm", cv2.IMREAD_GRAYSCALE)
+
+assert left is not None, "scene1.row3.col1.ppm bulunamadi; yukaridaki liste adlarini kontrol edin."
+assert right is not None, "scene1.row3.col3.ppm bulunamadi; yukaridaki liste adlarini kontrol edin."
+
+stereo = cv2.StereoSGBM_create(
+    minDisparity=0,
+    numDisparities=64,
+    blockSize=5,
+    P1=8 * 5 * 5,
+    P2=32 * 5 * 5,
+    uniquenessRatio=10,
+    speckleWindowSize=100,
+    speckleRange=32,
+)
+
+disparity = stereo.compute(left, right).astype(np.float32) / 16.0
+disp_norm = cv2.normalize(disparity, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+disp_color = cv2.applyColorMap(disp_norm, cv2.COLORMAP_JET)
+
+cv2.imwrite("/content/disparity_color.png", disp_color)
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+axes[0].imshow(left, cmap="gray")
+axes[0].set_title("Sol Goruntu (col1)")
+axes[0].axis("off")
+
+axes[1].imshow(cv2.cvtColor(disp_color, cv2.COLOR_BGR2RGB))
+axes[1].set_title("Fark Haritasi (Disparity Map)")
+axes[1].axis("off")
+
+plt.tight_layout()
+plt.show()
